@@ -27,87 +27,141 @@ namespace GameTD
         private int coins = 100;
         private int towerCost = 100;
         private int score = 0;
-        private List<int> highScore = new List<int>();
+        private readonly List<int> highScore = new List<int>();
         private readonly List<Tank> tanks = new List<Tank>();
         private readonly List<Tower> towers = new List<Tower>();
         private string status = "New Game";
+
+        public int Hearts
+        {
+            get { return hearts; }
+            set { 
+                hearts = value; 
+                UpdateLifeText(); 
+                CheckLose(); 
+            }
+        }
+
+        public int Coins
+        {
+            get { return coins; }
+            set { 
+                coins = value; 
+                UpdateCoinText(); 
+            }
+        }
+
+        public int TowerCost
+        {
+            get { return towerCost; }
+            set { 
+                towerCost = value; 
+                UpdateTowerCostText(); 
+            }
+        }
+
+        public int Score
+        {
+            get { return score; }
+            set { 
+                score = value; 
+                UpdateScoreText(); 
+            }
+        }
 
         public MainWindow()
         {
             InitializeComponent();
         }
 
+        private void UpdateLifeText()
+        {
+            LifeText.Text = $"{Hearts} / 10 жизней";
+        }
+
+        private void UpdateCoinText()
+        {
+            CoinText.Text = $"{coins} монет";
+        }
+
+        private void UpdateScoreText()
+        {
+            ScoreText.Text = $"Ваш счёт: {score}";
+        }
+
+        private void UpdateTowerCostText()
+        {
+            TowerCostText.Text = $"Следующая башня стоит: {towerCost}";
+        }
+
         private void StartGame()
         {
             InitializeTimer();
-            hearts = 10;
-            LifeText.Text = string.Format("{0} / 10 жизней", hearts);
-            coins = 100;
-            CoinText.Text = string.Format("{0} монет", coins);
-            towerCost = 100;
-            TowerCostText.Text = string.Format("Следующая башня стоит: {0}", towerCost);
-            score = 0;
-            ScoreText.Text = string.Format("Ваш счёт: {0}", score);
+            Hearts = 10;
+            Coins = 100;
+            TowerCost = 100;
+            Score = 0;
+        }
+
+        private void CheckLose()
+        {
+
+            if (Hearts <= 0)
+            {
+                HandleLose();
+            }
+        }
+
+        private void HandleLose()
+        {
+            AddHighscore();
+            SetLoseStatus();
+            StopGame();
         }
 
         private void StopGame()
         {
+            StopTimers();
+            RemoveEntities(tanks, "Ride");
+            RemoveEntities(towers, "Charge");
+        }
+
+        private void StopTimers()
+        {
             enemyGenerationTimer.Stop();
+        }
+
+        private void SetLoseStatus()
+        {
             status = "New Game";
             StatusText.Text = string.Format("Вы проиграли. Ваш счёт: {0}. Нажмите ЛКМ, чтобы начать снова.", score);
-            foreach (var tank in tanks)
-            {
-                GameCanvas.Children.Remove(tank);
-                try
-                {
-                    var sb = (Storyboard)tank.FindResource("Ride");
-                    sb.Stop();
-                    sb.Remove();
-                }
-                catch { }
-            }
-            foreach (var tower in towers)
-            {
-                GameCanvas.Children.Remove(tower);
-                try
-                {
-                    var sb = (Storyboard)tower.FindResource("Charge");
-                    sb.Stop();
-                    sb.Remove();
-                }
-                catch { }
-            }
-            tanks.Clear();
-            towers.Clear();
         }
 
-        private void AddScore(int add)
+        private void RemoveEntities<T>(List<T> entities, string storyboardResourceKey) where T : UserControl
         {
-            score += add;
-            ScoreText.Text = string.Format("Ваш счёт: {0}", score);
+            foreach (var entity in entities)
+            {
+                GameCanvas.Children.Remove(entity);
+                TryStopAndRemoveStoryboard(entity, storyboardResourceKey);
+            }
+
+            entities.Clear();
         }
 
-        private void AddCoins(int add)
+        private void TryStopAndRemoveStoryboard(UserControl element, string storyboardResourceKey)
         {
-            coins += add;
-            CoinText.Text = string.Format("{0} монет", coins);
+            try
+            {
+                var sb = (Storyboard)element.FindResource(storyboardResourceKey);
+                sb.Stop();
+                sb.Remove();
+            }
+            catch { }
         }
 
         private void NextTowerCost()
         {
-            towerCost = (int)Math.Round(towerCost * 1.15);
-            TowerCostText.Text = string.Format("Следующая башня стоит: {0}", towerCost);
-        }
-
-        private void SubstractLife()
-        {
-            --hearts;
-            LifeText.Text = string.Format("{0} / 10 жизней", hearts);
-            if (hearts <= 0)
-            {
-                AddHighscore();
-                StopGame();
-            }
+            TowerCost = (int)Math.Round(TowerCost * 1.15);
         }
 
         private void AddHighscore()
@@ -122,48 +176,46 @@ namespace GameTD
         private void Rectangle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             var pos = e.GetPosition(null);
-            if (coins >= towerCost && IsEmptyPosition(pos) && status == "Playing")
+            if (Coins >= TowerCost && IsEmptyPosition(pos) && status == "Playing")
             {
                 AddTower(pos);
-                NextTowerCost();
             }
         }
 
         private bool IsEmptyPosition(Point point)
         {
-            for (int i = 0; i < towers.Count; ++i)
+            foreach (var tower in towers)
             {
-                var tower = towers[i];
-                if (point.X > Canvas.GetLeft(tower) - 10
-                    && point.Y > Canvas.GetTop(tower) - 25
-                    && point.X < Canvas.GetLeft(tower) + tower.ActualWidth + 50
-                    && point.Y < Canvas.GetTop(tower) + tower.ActualHeight + 25)
+                if (IsPointInsideElement(point, tower, 10, 25, 50, 25))
                 {
                     return false;
                 }
             }
-            if (point.X > Canvas.GetLeft(road1) - 15
-                && point.Y > Canvas.GetTop(road1) - 30
-                && point.X < Canvas.GetLeft(road1) + road1.ActualWidth + 45
-                && point.Y < Canvas.GetTop(road1) + road1.ActualHeight + 30)
-            {
-                return false;
-            }
-            if (point.X > Canvas.GetLeft(road2) - 15
-                && point.Y > Canvas.GetTop(road2) - 30
-                && point.X < Canvas.GetLeft(road2) + road2.ActualWidth + 45
-                && point.Y < Canvas.GetTop(road2) + road2.ActualHeight + 30)
-            {
-                return false;
-            }
-            if (point.X > Canvas.GetLeft(road3) - 15
-                && point.Y > Canvas.GetTop(road3) - 30
-                && point.X < Canvas.GetLeft(road3) + road3.ActualWidth + 45
-                && point.Y < Canvas.GetTop(road3) + road3.ActualHeight + 30)
+            if (IsPointInsideElement(point, road1, 15, 25, 45, 30) ||
+                IsPointInsideElement(point, road2, 15, 25, 45, 30) ||
+                IsPointInsideElement(point, road3, 15, 25, 45, 30))
             {
                 return false;
             }
             return true;
+        }
+
+        private bool IsPointInsideElement(Point point, FrameworkElement element, double leftOffset, double topOffset, double rightOffset, double bottomOffset)
+        {
+            var leftPos = double.IsNaN(Canvas.GetLeft(element)) ? 0 : Canvas.GetLeft(element);
+            var topPos = double.IsNaN(Canvas.GetTop(element)) ? 0 : Canvas.GetTop(element);
+
+            var left = leftPos - leftOffset;
+            var top = topPos - topOffset;
+            var right = leftPos + element.ActualWidth + rightOffset;
+            var bottom = topPos + element.ActualHeight + bottomOffset;
+
+            return point.X > left && point.Y > top && point.X < right && point.Y < bottom;
+        }
+        
+        private void UpdateEnemyTimerText()
+        {
+            EnemyTimerText.Text = string.Format("Периодичность врагов: {0}", enemyGenerationTimer.Interval.TotalSeconds);
         }
 
         private void InitializeTimer()
@@ -173,7 +225,7 @@ namespace GameTD
                 Interval = new TimeSpan(0, 0, 4)
             };
             enemyGenerationTimer.Tick += new EventHandler(DispatcherTimer_Tick);
-            EnemyTimerText.Text = string.Format("Периодичность врагов: {0}", enemyGenerationTimer.Interval.TotalSeconds);
+            UpdateEnemyTimerText();
             enemyGenerationTimer.Start();
         }
 
@@ -193,7 +245,7 @@ namespace GameTD
             {
                 enemyGenerationTimer.Interval = enemyGenerationTimer.Interval.Subtract(new TimeSpan(100000));
             }
-            EnemyTimerText.Text = string.Format("Периодичность врагов: {0}", enemyGenerationTimer.Interval.TotalSeconds);
+            UpdateEnemyTimerText();
             enemyGenerationTimer.Start();
         }
 
@@ -217,8 +269,9 @@ namespace GameTD
             charge.Completed += (sender, e) => SpawnBullet(sender, e, tower, charge);
             charge.Begin();
             towers.Add(tower);
-            AddScore(10);
-            AddCoins(-towerCost);
+            Score += 10;
+            Coins -= TowerCost;
+            NextTowerCost();
         }
 
         private void SpawnBullet(object _s, EventArgs _e, Tower tower, Storyboard charge)
@@ -234,7 +287,7 @@ namespace GameTD
                 StartBulletAnimation(bullet, tank);
             }
             charge.Begin();
-            AddScore(1);
+            ++Score;
         }
 
         private void DestroyTank(object sender, EventArgs _e, Bullet bullet, Tank tank)
@@ -255,8 +308,8 @@ namespace GameTD
             GameCanvas.Children.Remove(tank);
             GameCanvas.Children.Remove(bullet);
             tanks.Remove(tank);
-            AddScore(100);
-            AddCoins(15);
+            Score += 100;
+            Coins += 15;
         }
 
         private Tank GetNearestTankInRadius(Tower tower)
@@ -283,12 +336,12 @@ namespace GameTD
             return nearestTank;
         }
 
-        private double GetDistanceBetween(UIElement first, UIElement second)
+        private double GetDistanceBetween(UserControl first, UserControl second)
         {
-            double firstX = Canvas.GetLeft(first);
-            double secondX = Canvas.GetLeft(second);
-            double firstY = Canvas.GetTop(first);
-            double secondY = Canvas.GetTop(second);
+            double firstX = Canvas.GetLeft(first) + first.ActualWidth / 2;
+            double secondX = Canvas.GetLeft(second) + second.ActualWidth / 2;
+            double firstY = Canvas.GetTop(first) + first.ActualHeight / 2;
+            double secondY = Canvas.GetTop(second) + second.ActualWidth / 2;
             double distance = Math.Sqrt(Math.Pow(firstX - secondX, 2) + Math.Pow(firstY - secondY, 2));
             return distance;
         }
@@ -296,7 +349,7 @@ namespace GameTD
         private void TankWayCoompleted(object _sender, EventArgs _e, Tank tank)
         {
             if (!tanks.Contains(tank)) return;
-            SubstractLife();
+            --Hearts;
             tanks.Remove(tank);
             GameCanvas.Children.Remove(tank);
         }
@@ -325,8 +378,8 @@ namespace GameTD
             {
                 From = firstY,
                 To = secondY,
-                BeginTime = TimeSpan.FromSeconds(5),
-                Duration = TimeSpan.FromSeconds(5)
+                BeginTime = TimeSpan.FromSeconds(4.8),
+                Duration = TimeSpan.FromSeconds(5.2)
             };
             Storyboard.SetTarget(animationSecondPath, tank);
             Storyboard.SetTargetProperty(animationSecondPath, new PropertyPath(Canvas.TopProperty));
@@ -335,8 +388,8 @@ namespace GameTD
             {
                 From = 270,
                 To = 180,
-                BeginTime = TimeSpan.FromSeconds(4.9),
-                Duration = TimeSpan.FromSeconds(0.35)
+                BeginTime = TimeSpan.FromSeconds(4.7),
+                Duration = TimeSpan.FromSeconds(0.7)
             };
             Storyboard.SetTarget(animationRotate, tank);
             Storyboard.SetTargetProperty(animationRotate, new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
@@ -345,8 +398,8 @@ namespace GameTD
             {
                 From = secondX,
                 To = thirdX,
-                BeginTime = TimeSpan.FromSeconds(10),
-                Duration = TimeSpan.FromSeconds(5)
+                BeginTime = TimeSpan.FromSeconds(9.8),
+                Duration = TimeSpan.FromSeconds(5.2)
             };
             Storyboard.SetTarget(animationThirdPath, tank);
             Storyboard.SetTargetProperty(animationThirdPath, new PropertyPath(Canvas.LeftProperty));
@@ -355,8 +408,8 @@ namespace GameTD
             {
                 From = 180,
                 To = 270,
-                BeginTime = TimeSpan.FromSeconds(9.9),
-                Duration = TimeSpan.FromSeconds(0.35)
+                BeginTime = TimeSpan.FromSeconds(9.7),
+                Duration = TimeSpan.FromSeconds(0.7)
             };
             Storyboard.SetTarget(animationRotateTwo, tank);
             Storyboard.SetTargetProperty(animationRotateTwo, new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
